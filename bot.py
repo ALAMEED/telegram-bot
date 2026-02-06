@@ -8,7 +8,7 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # --- الإعدادات ---
-TOKEN = '1095568264:AAFfnXrbl_VJ4L8qzjvcDZ_mpe_IPRttEgc'.strip()
+TOKEN = '8490406462:AAFgxnr3RZpcwVdHDERah6xhCC7QXkmdb0A'.strip()
 ADMIN_ID = 818416878 
 CHANNEL_ID = 'ALAMEED_FM'
 
