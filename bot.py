@@ -4,41 +4,51 @@ import requests
 import yt_dlp
 import os
 import time
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- الإعدادات النهائية ---
-# التوكن الجديد مدمج وجاهز
+# --- الإعدادات ---
 TOKEN = '1095568264:AAFfnXrbl_VJ4L8qzjvcDZ_mpe_IPRttEgc'.strip()
 ADMIN_ID = 818416878 
 CHANNEL_ID = 'ALAMEED_FM'
 
 bot = telebot.TeleBot(TOKEN)
 
-# فحص الاشتراك الإجباري
+# --- نظام خداع Render (فتح بورت وهمي) ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Hassoun AI is Alive!")
+
+def run_health_server():
+    # Render يعطي البورت في المتغير البيئي PORT، وإذا لم يجده يستخدم 10000
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    server.serve_forever()
+
+# --- فحص الاشتراك ---
 def is_subscribed(user_id):
     try:
         status = bot.get_chat_member(f"@{CHANNEL_ID}", user_id).status
         return status in ['member', 'administrator', 'creator']
-    except: 
-        return True # في حال وجود خطأ في الفحص يعمل البوت تلقائياً
+    except: return True
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    user_name = message.from_user.first_name
     if not is_subscribed(message.from_user.id):
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("اشترك هنا لتفعيل البوت ✅", url=f"https://t.me/{CHANNEL_ID}"))
-        return bot.send_message(message.chat.id, f"⚠️ أهلاً {user_name}! اشترك بقناة البوت أولاً حتى يشتغل عندك الذكاء الاصطناعي والتحميل.", reply_markup=markup)
-    
-    bot.reply_to(message, f"هلا والله {user_name}! نورت بوت حسون AI 🚀\n\n🔹 أرسل أي سؤال (بالعراقي أو أي لغة) وسأجيبك فوراً.\n🔹 أرسل رابط فيديو (TikTok, Instagram, YouTube) لتحميله مباشرة.")
+        markup.add(types.InlineKeyboardButton("اشترك هنا ✅", url=f"https://t.me/{CHANNEL_ID}"))
+        return bot.send_message(message.chat.id, "⚠️ اشترك بالقناة أولاً لتفعيل البوت!", reply_markup=markup)
+    bot.reply_to(message, "هلا بيك! أنا حسون AI الشامل. أرسل سؤالك أو رابط فيديو لتحميله! 🚀")
 
-# --- نظام تحميل الفيديوهات ---
+# --- نظام التحميل ---
 def download_video(url):
     ydl_opts = {
         'format': 'best',
         'outtmpl': 'video_%(id)s.mp4',
         'quiet': True,
-        'no_warnings': True,
-        'max_filesize': 50 * 1024 * 1024 # حد أقصى 50 ميجا
+        'max_filesize': 48 * 1024 * 1024 
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -47,43 +57,33 @@ def download_video(url):
 @bot.message_handler(func=lambda m: "http" in m.text)
 def handle_links(message):
     if not is_subscribed(message.from_user.id): return
-    
-    url = message.text
-    msg = bot.reply_to(message, "⏳ صار تدلل، جاري التحميل... انتظر ثواني.")
-    
+    msg = bot.reply_to(message, "⏳ جارِ التحميل... تدلل.")
     try:
-        video_file = download_video(url)
+        video_file = download_video(message.text)
         with open(video_file, 'rb') as v:
             bot.send_video(message.chat.id, v, caption="✅ تم التحميل بواسطة حسون AI")
-        os.remove(video_file) # حذف الملف لتوفير المساحة
+        os.remove(video_file)
         bot.delete_message(message.chat.id, msg.message_id)
-    except Exception as e:
-        bot.edit_message_text("❌ عذراً، هذا الرابط غير مدعوم أو حجم الفيديو كبير جداً.", message.chat.id, msg.message_id)
+    except:
+        bot.edit_message_text("❌ عذراً، حجم الفيديو كبير أو الرابط غير مدعوم.", message.chat.id, msg.message_id)
 
-# --- نظام الذكاء الاصطناعي (حسون AI) ---
+# --- نظام الدردشة ---
 @bot.message_handler(func=lambda m: True)
 def chat_ai(message):
     if not is_subscribed(message.from_user.id): return
-    
     bot.send_chat_action(message.chat.id, 'typing')
     
-    user_query = message.text
-    # توجيه البوت ليتحدث بلهجة عراقية بطلاقة
-    prompt = f"أنت مساعد ذكي اسمك حسون AI. تتحدث بطلاقة وبشكل طبيعي جداً باللهجة العراقية. جاوب على: {user_query}"
-    api_url = f"https://text.pollinations.ai/{prompt}?model=llama&search=true"
+    api_url = f"https://text.pollinations.ai/{message.text}?model=llama&system=Talk%20in%20Iraqi%20dialect%20as%20Hassoun%20AI"
     
-    # محاولة الاتصال 3 مرات لتفادي ضغط السيرفر
-    for attempt in range(3):
-        try:
-            response = requests.get(api_url, timeout=20)
-            if response.status_code == 200 and len(response.text) > 1:
-                return bot.reply_to(message, response.text)
-        except:
-            time.sleep(1)
-            continue
-            
-    bot.reply_to(message, "🤖 السيرفر تعبان شوية، ارجع اسألني هسة وراح أجاوبك فوراً!")
+    try:
+        response = requests.get(api_url, timeout=15)
+        bot.reply_to(message, response.text)
+    except:
+        bot.reply_to(message, "🤖 السيرفر مشغول، أعد إرسال سؤالك هسة.")
 
+# --- تشغيل البوت مع السيرفر الوهمي ---
 if __name__ == "__main__":
-    print("البوت شغال بالتوكن الجديد... انطلق يا حسين!")
+    # تشغيل سيرفر البورت في خلفية الكود
+    threading.Thread(target=run_health_server, daemon=True).start()
+    print("السيرفر الوهمي اشتغل... البوت ينطلق الآن!")
     bot.infinity_polling()
