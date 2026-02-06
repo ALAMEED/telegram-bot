@@ -5,7 +5,7 @@ import yt_dlp
 import os
 
 # --- الإعدادات ---
-TOKEN = '1095568264:AAGF8NrtR2537DD1PzuzywRgbGMY_0IdivE'.strip()
+TOKEN = '1095568264:AAFfnXrbl_VJ4L8qzjvcDZ_mpe_IPRttEgc'.strip()
 ADMIN_ID = 818416878 
 CHANNEL_ID = 'ALAMEED_FM'
 
