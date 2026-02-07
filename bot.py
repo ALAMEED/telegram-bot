@@ -7,7 +7,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # --- 1. الإعدادات ---
 # التوكن مالتك شغال 100%
-TOKEN = '8490406462:AAFgxnr3RZpcwVdHDERah6xhCC7QXkmdb0A'
+TOKEN = '8490406462:AAGy-TKSqGdgRfgqAG6pSScLafc044zd18k'
 bot = telebot.TeleBot(TOKEN)
 
 # --- 2. سيرفر النبض لـ Render ---
