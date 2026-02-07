@@ -2,58 +2,78 @@ import telebot
 import requests
 import os
 import threading
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # --- الإعدادات ---
+# تأكد من وضع التوكن الصحيح هنا
 TOKEN = '8490406462:AAFgxnr3RZpcwVdHDERah6xhCC7QXkmdb0A'
 bot = telebot.TeleBot(TOKEN)
 
-# سيرفر النبض لـ Render
+# --- سيرفر النبض لـ Render (للحفاظ على استمرارية الخدمة) ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200); self.end_headers(); self.wfile.write(b"World Engines AI is Online")
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Hassoun Engine is Running")
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
-    HTTPServer(('0.0.0.0', port), HealthCheckHandler).serve_forever()
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    server.serve_forever()
 
-# --- مصفوفة المحركات العالمية ---
-def get_world_ai_response(query):
-    # قائمة بأسماء الموديلات المتاحة عالمياً عبر التوصيل المجاني
-    models = ["deepseek", "openai", "claude", "gemini", "llama"]
-    system_prompt = "أنت حسون AI المطور، مساعد ذكي جداً تتحدث باللهجة العراقية ببراعة وتساعد المستخدمين بكل إخلاص."
+# --- محرك الذكاء الاصطناعي (الربط المباشر) ---
+def get_ai_response(user_query):
+    # نظام الـ Seed العشوائي لكسر حظر السيرفرات وتجديد الاستجابة
+    random_seed = int(time.time())
+    system_prompt = "أنت حسون AI، مساعد تقني ذكي تتحدث اللهجة العراقية ببراعة. جاوب باختصار ومودة."
+    
+    # المحرك الأساسي: OpenAI (عبر مسار سريع)
+    primary_url = f"https://text.pollinations.ai/{user_query}?model=openai&system={system_prompt}&seed={random_seed}"
+    
+    # المحرك البديل: Mistral (سريع جداً وخفيف)
+    backup_url = f"https://text.pollinations.ai/{user_query}?model=mistral&system={system_prompt}"
 
-    for model_name in models:
-        try:
-            # نرسل الطلب للمحرك الحالي
-            url = f"https://text.pollinations.ai/{query}?model={model_name}&system={system_prompt}"
-            response = requests.get(url, timeout=12) # وقت استجابة سريع للتبديل
-            
-            if response.status_code == 200 and len(response.text.strip()) > 5:
-                print(f"✅ تمت الاستجابة بواسطة محرك: {model_name}")
-                return response.text
-        except:
-            print(f"❌ فشل محرك {model_name}.. جاري التحويل للمحرك التالي.")
-            continue
-            
-    return "🤖 يا غالي، يبدو أن جميع المحركات العالمية (DeepSeek, GPT, Gemini) مشغولة حالياً. ارجع دز سؤالك بعد لحظات."
+    try:
+        # المحاولة الأولى
+        response = requests.get(primary_url, timeout=15)
+        if response.status_code == 200 and len(response.text.strip()) > 1:
+            return response.text
+    except:
+        pass
 
+    try:
+        # المحاولة الثانية (ربط توازي في حال فشل الأول)
+        response = requests.get(backup_url, timeout=10)
+        if response.status_code == 200:
+            return response.text
+    except:
+        return "🤖 يا غالي، السيرفر بي شوية ضغط. ارجع دز رسالتك هسة ومية بالمية أجاوبك!"
+
+# --- الأوامر ---
 @bot.message_handler(commands=['start'])
-def start(message):
-    bot.reply_to(message, "أهلاً بك في النسخة العالمية من حسون AI 🌍🚀\n\nتم ربط البوت بـ (DeepSeek, GPT-4, Gemini, Claude, Llama).\n\nاسألني أي سؤال وراح أجاوبك بأفضل محرك متاح!")
+def send_welcome(message):
+    bot.reply_to(message, "هلا والله بالهندسة! 💡🛠️\nأنا حسون AI، جاهز لأي سؤال ببالك. اسألني أي شي هسة.")
 
 @bot.message_handler(func=lambda m: True)
-def handle_chat(message):
+def handle_message(message):
+    # تجاهل الروابط في بوت الدردشة
     if "http" in message.text:
-        return bot.reply_to(message, "⚠️ حبيبي هذا بوت دردشة بس. بوت التحميل راح نخلصه ورا هذا مباشرة.")
-    
+        bot.reply_to(message, "⚠️ حبيبي، هذا البوت للدردشة بس. بوت التحميل راح نكمله بالخطوة الجاية.")
+        return
+
+    # إظهار حالة "يكتب الآن"
     bot.send_chat_action(message.chat.id, 'typing')
     
-    # استدعاء الترسانة
-    answer = get_world_ai_response(message.text)
+    # جلب الرد
+    answer = get_ai_response(message.text)
     bot.reply_to(message, answer)
 
+# --- تشغيل النظام ---
 if __name__ == "__main__":
+    # تشغيل سيرفر الصحة في خلفية الكود
     threading.Thread(target=run_health_server, daemon=True).start()
-    print("الترسانة العالمية جاهزة للانطلاق! 🚀")
-    bot.infinity_polling()
+    print("تم تشغيل الترسانة بنجاح! 🚀")
+    
+    # تشغيل البوت مع خاصية عدم التوقف
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
