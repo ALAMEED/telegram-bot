@@ -1,82 +1,81 @@
 import telebot
 import requests
+import json
 import os
 import threading
-import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- 1. الإعدادات ---
-# التوكن مالتك شغال 100%
-TOKEN = '8490406462:AAEBKdYtoc4s1CmGJ4j65uAxrlPMqas3xwc'
+# --- الإعدادات ---
+TOKEN = '8490406462:AAFgxnr3RZpcwVdHDERah6xhCC7QXkmdb0A' # تأكد إن هذا التوكن الجديد
 bot = telebot.TeleBot(TOKEN)
 
-# --- 2. سيرفر النبض لـ Render ---
+# سيرفر النبض لـ Render
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Hassoun AI is Online")
+        self.send_response(200); self.end_headers(); self.wfile.write(b"Hassoun is Live")
 
 def run_health_server():
     port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-    server.serve_forever()
+    HTTPServer(('0.0.0.0', port), HealthCheckHandler).serve_forever()
 
-# --- 3. محرك الذكاء الاصطناعي (نظام الربط المستقر) ---
-def get_world_ai_response(query):
+# --- دالة الرد الذكي (نسخة مستقرة جداً) ---
+def get_ai_answer(user_message):
     try:
-        # تشفير النص (Encoding) لمنع الأخطاء في الحروف العربية والمسافات
-        safe_query = urllib.parse.quote(query)
+        # الربط مع محرك ذكاء اصطناعي مفتوح ومستقر
+        url = "https://api.blackbox.ai/api/chat"
+        payload = {
+            "messages": [
+                {"role": "system", "content": "أنت حسون AI، مساعد تقني عراقي ذكي ومرح. تجيب باللهجة العراقية فقط."},
+                {"role": "user", "content": user_message}
+            ],
+            "model": "deepseek-v3", # أو "gpt-4o"
+            "max_tokens": 500
+        }
+        headers = {'Content-Type': 'application/json'}
         
-        # نظام التوجيه (System Prompt) ليكون الرد عراقي
-        system_prompt = urllib.parse.quote("أنت حسون AI، مساعد ذكي تتحدث اللهجة العراقية بأسلوب تقني ومرح.")
+        response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=15)
         
-        # استخدام محرك Pollinations المباشر (أكثر استقراراً من DeepSeek حالياً)
-        url = f"https://text.pollinations.ai/{safe_query}?model=openai&system={system_prompt}&seed=123"
-        
-        response = requests.get(url, timeout=20)
-        
-        if response.status_code == 200 and response.text.strip():
-            return response.text.strip()
+        if response.status_code == 200:
+            # تنظيف الرد من أي أكواد برمجية زايدة
+            full_response = response.text.strip()
+            # في بعض الأحيان الرد يكون JSON، نحتاج نطلعه صافي
+            try:
+                data = json.loads(full_response)
+                return data.get('content', full_response)
+            except:
+                return full_response
         else:
-            # محاولة بمحرك بديل في حال فشل الأول (Llama 3)
-            backup_url = f"https://text.pollinations.ai/{safe_query}?model=llama"
-            backup_res = requests.get(backup_url, timeout=15)
-            return backup_res.text.strip() if backup_res.status_code == 200 else "🤖 يا غالي، السيرفر العالمي بيه ضغط، ثواني وارجع دز رسالتك."
-
+            return "🤖 السيرفر العالمي شوية ثقيل، ارجع دز رسالتك عيوني."
+            
     except Exception as e:
-        print(f"Error: {e}")
-        return "🤖 حبيبي، اكو خلل بالربط، لحظات وجرب مرة ثانية."
+        print(f"Error AI: {e}")
+        return "⚠️ اكو مشكلة بربط الدائرة البرمجية، ثواني وارجع."
 
-# --- 4. معالجة الرسائل ---
+# --- معالجة الرسائل ---
 @bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, "هلا والله بالهندسة! نورت حسون AI 💡\nأنا جاهز ومستقر هسة، اسألني أي شي وبالعراقي.")
+def welcome(message):
+    bot.reply_to(message, "هلا بيك يا هندسة! 🛠️\nحسون AI جاهز للدردشة. اسأل أي شي.")
 
 @bot.message_handler(func=lambda m: True)
-def handle_message(message):
-    # إظهار حالة "يكتب الآن"
-    try:
-        bot.send_chat_action(message.chat.id, 'typing')
-    except:
-        pass
-
-    # جلب الرد
-    answer = get_world_ai_response(message.text)
+def chat_handler(message):
+    if not message.text: return
     
-    # فحص نهائي للتأكد أن الرسالة ليست فارغة
-    if answer and len(answer.strip()) > 0:
+    bot.send_chat_action(message.chat.id, 'typing')
+    
+    # جلب الجواب من المحرك
+    answer = get_ai_answer(message.text)
+    
+    # فحص إذا الرد فارغ (تجنب خطأ 400)
+    if answer and answer.strip():
         bot.reply_to(message, answer)
     else:
-        bot.reply_to(message, "🤖 السيرفر جاوبني برد فارغ، جرب تغير صيغة السؤال.")
+        bot.reply_to(message, "🤖 اعتذر، الرد ضاع بالطريق. جرب مرة ثانية.")
 
-# --- 5. التشغيل ---
 if __name__ == "__main__":
-    # تشغيل سيرفر الصحة بالخلفية
+    # تشغيل النبض
     threading.Thread(target=run_health_server, daemon=True).start()
-    print("البوت انطلق بنجاح! 🚀")
     
-    # تنظيف أي Webhook قديم لتجنب خطأ 409
+    # أهم خطوة لإنهاء الـ 409
     bot.remove_webhook()
-    # تشغيل البوت
+    print("البوت انطلق..")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
